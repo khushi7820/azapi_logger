@@ -1,11 +1,10 @@
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
     try {
         console.log("=========== 11ZA INCOMING WEBHOOK ===========");
         console.log("BODY:", req.body);
 
         const body = req.body;
 
-        // only process media messages
         if (
             body &&
             body.content &&
@@ -19,19 +18,17 @@ module.exports = async (req, res) => {
             console.log("=========== MEDIA URL EXTRACTED ===========");
             console.log(mediaUrl);
 
-            // ==============================
             // CALL AZAPI OCR
-            // ==============================
             const azapiResponse = await fetch("https://adv-ocr.azapi.ai/ind0003b", {
                 method: "POST",
                 headers: {
-                    "Authorization":
+                    Authorization:
                         "prod-da871e689cafe6a197237890690bd70e428f733e75ea8a1e61e0303243ffa823",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    file: mediaUrl
-                })
+                    file: mediaUrl,
+                }),
             });
 
             const azapiResult = await azapiResponse.json();
@@ -39,10 +36,8 @@ module.exports = async (req, res) => {
             console.log("=========== AZAPI RESPONSE ===========");
             console.log(JSON.stringify(azapiResult, null, 2));
 
-            // exact same raw json text
             const rawJsonText = JSON.stringify(azapiResult, null, 2);
 
-            // whatsapp text has limits -> split into chunks
             const chunkSize = 3000;
             const chunks = [];
 
@@ -50,14 +45,11 @@ module.exports = async (req, res) => {
                 chunks.push(rawJsonText.substring(i, i + chunkSize));
             }
 
-            // ==============================
-            // SEND EACH CHUNK BACK TO USER
-            // ==============================
             for (const part of chunks) {
-                await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
+                const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
                     method: "POST",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
                     body: JSON.stringify({
                         sendto: customerNumber,
@@ -65,20 +57,23 @@ module.exports = async (req, res) => {
                             "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
                         originWebsite: "https://weavekaari.com/",
                         contentType: "text",
-                        text: part
-                    })
+                        text: part,
+                    }),
                 });
+
+                console.log("=========== 11ZA SEND RESPONSE ===========");
+                console.log(await sendResp.text());
             }
 
             return res.status(200).json({
                 success: true,
-                message: "OCR processed and raw JSON sent to WhatsApp"
+                message: "OCR processed and raw JSON sent to WhatsApp",
             });
         }
 
         return res.status(200).json({
             success: true,
-            message: "No media found, webhook received"
+            message: "No media found",
         });
     } catch (error) {
         console.log("=========== ERROR ===========");
@@ -86,7 +81,7 @@ module.exports = async (req, res) => {
 
         return res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
         });
     }
-};
+}
