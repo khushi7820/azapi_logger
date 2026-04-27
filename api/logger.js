@@ -1,43 +1,85 @@
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
     try {
         console.log("=========== 11ZA INCOMING WEBHOOK ===========");
         console.log("BODY:", req.body);
 
-        const mediaUrl = req.body?.content?.media?.url;
+        const body = req.body;
 
-        if (!mediaUrl) {
+        // only process media messages
+        if (
+            body &&
+            body.content &&
+            body.content.contentType === "media" &&
+            body.content.media &&
+            body.content.media.url
+        ) {
+            const mediaUrl = body.content.media.url;
+            const customerNumber = body.from;
+
+            console.log("=========== MEDIA URL EXTRACTED ===========");
+            console.log(mediaUrl);
+
+            // ==============================
+            // CALL AZAPI OCR
+            // ==============================
+            const azapiResponse = await fetch("https://adv-ocr.azapi.ai/ind0003b", {
+                method: "POST",
+                headers: {
+                    "Authorization":
+                        "prod-da871e689cafe6a197237890690bd70e428f733e75ea8a1e61e0303243ffa823",
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    file: mediaUrl
+                })
+            });
+
+            const azapiResult = await azapiResponse.json();
+
+            console.log("=========== AZAPI RESPONSE ===========");
+            console.log(JSON.stringify(azapiResult, null, 2));
+
+            // exact same raw json text
+            const rawJsonText = JSON.stringify(azapiResult, null, 2);
+
+            // whatsapp text has limits -> split into chunks
+            const chunkSize = 3000;
+            const chunks = [];
+
+            for (let i = 0; i < rawJsonText.length; i += chunkSize) {
+                chunks.push(rawJsonText.substring(i, i + chunkSize));
+            }
+
+            // ==============================
+            // SEND EACH CHUNK BACK TO USER
+            // ==============================
+            for (const part of chunks) {
+                await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        sendto: customerNumber,
+                        authToken:
+                            "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
+                        originWebsite: "https://weavekaari.com/",
+                        contentType: "text",
+                        text: part
+                    })
+                });
+            }
+
             return res.status(200).json({
-                success: false,
-                message: "No media URL found in incoming webhook payload"
+                success: true,
+                message: "OCR processed and raw JSON sent to WhatsApp"
             });
         }
 
-        console.log("=========== MEDIA URL EXTRACTED ===========");
-        console.log(mediaUrl);
-
-        const azapiResponse = await fetch("https://adv-ocr.azapi.ai/ind0003b", {
-            method: "POST",
-            headers: {
-                "Authorization": "prod-da871e689cafe6a197237890690bd70e428f733e75ea8a1e61e0303243ffa823",
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                file: mediaUrl
-            })
-        });
-
-        const azapiJson = await azapiResponse.json();
-
-        console.log("=========== AZAPI OCR RESPONSE ===========");
-        console.log(JSON.stringify(azapiJson, null, 2));
-
         return res.status(200).json({
             success: true,
-            mediaUrl: mediaUrl,
-            azapiResult: azapiJson,
-            processedAt: new Date().toISOString()
+            message: "No media found, webhook received"
         });
-
     } catch (error) {
         console.log("=========== ERROR ===========");
         console.log(error);
@@ -47,4 +89,4 @@ export default async function handler(req, res) {
             error: error.message
         });
     }
-}
+};
