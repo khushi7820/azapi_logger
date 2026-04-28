@@ -44,7 +44,7 @@ export default async function handler(req, res) {
         // =========================
         if (mediaType !== "image" && mediaType !== "document") {
             await sendWhatsappText(customerNumber,
-                "Please send only invoice image or PDF document. Other media files are not supported."
+                "Please send only account or billing related documents in (Image or PDF) format. Other media files are not supported."
             );
 
             return res.status(200).json({
