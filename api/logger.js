@@ -119,7 +119,7 @@ export default async function handler(req, res) {
         // GENERATE STATELESS URL WITH BASE64 DATA
         // =========================
         const base64Content = Buffer.from(rawJsonText).toString('base64');
-        const publicFileUrl = `https://azapi-logger.vercel.app/api/store?name=${encodeURIComponent(fileName)}&data=${encodeURIComponent(base64Content)}`;
+        const publicFileUrl = `https://azapi-logger.vercel.app/files/${encodeURIComponent(base64Content)}/${encodeURIComponent(fileName)}`;
 
         console.log("=========== GENERATED STATELESS TXT URL ===========");
         
