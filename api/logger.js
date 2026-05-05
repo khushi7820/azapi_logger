@@ -111,7 +111,9 @@ export default async function handler(req, res) {
         const invoiceDate =
             azapiResult?.output?.invoice_summary?.["invoice date"] || "NO-DATE";
 
-        const fileName = `${invoiceDate}-${invoiceNo}.txt`;
+        let fileName = `${invoiceDate}-${invoiceNo}.txt`;
+        // Sanitize filename: replace spaces with dashes and remove any non-alphanumeric/dash/dot characters
+        fileName = fileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.-]/g, '');
 
         // =========================
         // TEMP STORE FILE CONTENT
@@ -119,7 +121,7 @@ export default async function handler(req, res) {
         const fileId = Date.now().toString();
         saveTempFile(fileId, rawJsonText);
 
-        const publicFileUrl = `https://azapi-logger.vercel.app/api/store?id=${fileId}`;
+        const publicFileUrl = `https://azapi-logger.vercel.app/api/store?id=${fileId}&name=${encodeURIComponent(fileName)}`;
 
         console.log("=========== GENERATED TXT URL ===========");
         console.log(publicFileUrl);
@@ -127,7 +129,7 @@ export default async function handler(req, res) {
         // =========================
         // SEND TXT DOCUMENT TO WHATSAPP
         // =========================
-        await sendWhatsappDocument(customerNumber, publicFileUrl);
+        await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
 
         return res.status(200).json({
             success: true,
@@ -170,7 +172,7 @@ async function sendWhatsappText(customerNumber, messageText) {
 // =========================
 // SEND DOCUMENT
 // =========================
-async function sendWhatsappDocument(customerNumber, fileUrl) {
+async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
     const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
         method: "POST",
         headers: {
@@ -183,6 +185,7 @@ async function sendWhatsappDocument(customerNumber, fileUrl) {
             originWebsite: "https://weavekaari.com/",
             contentType: "document",
             myfile: fileUrl,
+            filename: fileName, // Some APIs use this to set the name of the document
         }),
     });
 
