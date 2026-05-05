@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
         // Generate Base64 Data URI
         const base64Content = Buffer.from(rawJsonText).toString('base64');
-        const dataUri = `data:text/plain;base64,${base64Content}`;
+        const publicFileUrl = `https://azapi-logger.vercel.app/api/store?name=${encodeURIComponent(fileName)}&data=${encodeURIComponent(base64Content)}`;
 
         // Send to WhatsApp using the exact same function
         const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
                 authToken: "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
                 originWebsite: "https://weavekaari.com/",
                 contentType: "document",
-                myfile: dataUri,
+                myfile: publicFileUrl,
                 filename: fileName, 
             }),
         });
