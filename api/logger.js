@@ -1,3 +1,5 @@
+import { saveTempFile } from "../memoryStore.js";
+
 export default async function handler(req, res) {
     try {
         console.log("=========== 11ZA INCOMING WEBHOOK ===========");
@@ -43,7 +45,8 @@ export default async function handler(req, res) {
         // CONDITION 3: ONLY IMAGE OR DOCUMENT
         // =========================
         if (mediaType !== "image" && mediaType !== "document") {
-            await sendWhatsappText(customerNumber,
+            await sendWhatsappText(
+                customerNumber,
                 "Please send only account or billing related documents in (Image or PDF) format. Other media files are not supported."
             );
 
@@ -57,14 +60,13 @@ export default async function handler(req, res) {
         // CONDITION 4: VALID FILE EXTENSION ONLY
         // =========================
         const lowerUrl = mediaUrl.toLowerCase();
-
         const allowedExtensions = [".jpg", ".jpeg", ".png", ".pdf"];
-
-        const isAllowedFile = allowedExtensions.some(ext => lowerUrl.includes(ext));
+        const isAllowedFile = allowedExtensions.some((ext) => lowerUrl.includes(ext));
 
         if (!isAllowedFile) {
-            await sendWhatsappText(customerNumber,
-                "Please send only JPG, PNG or PDF invoice files. Excel, video, audio or unsupported files are not accepted."
+            await sendWhatsappText(
+                customerNumber,
+                "Please send only JPG, PNG or PDF account related files. Excel, video, audio or unsupported files are not accepted."
             );
 
             return res.status(200).json({
@@ -95,25 +97,43 @@ export default async function handler(req, res) {
 
         let rawJsonText = JSON.stringify(azapiResult, null, 2);
 
-        // Replace AZAPI with 11ZA in the output IDs and any other places, preserving case
-        rawJsonText = rawJsonText.replace(/AZAPI/g, "11ZA").replace(/azapi/g, "11za").replace(/Azapi/g, "11za");
+        rawJsonText = rawJsonText
+            .replace(/AZAPI/g, "11ZA")
+            .replace(/azapi/g, "11za")
+            .replace(/Azapi/g, "11za");
 
-        const chunkSize = 3000;
-        const chunks = [];
+        // =========================
+        // DYNAMIC FILE NAME
+        // =========================
+        const invoiceNo =
+            azapiResult?.output?.invoice_summary?.["invoice no"] || "NO-INVOICE";
 
-        for (let i = 0; i < rawJsonText.length; i += chunkSize) {
-            chunks.push(rawJsonText.substring(i, i + chunkSize));
-        }
+        const invoiceDate =
+            azapiResult?.output?.invoice_summary?.["invoice date"] || "NO-DATE";
 
-        for (const part of chunks) {
-            await sendWhatsappText(customerNumber, part);
-        }
+        const fileName = `${invoiceDate}-${invoiceNo}.txt`;
+
+        // =========================
+        // TEMP STORE FILE CONTENT
+        // =========================
+        const fileId = Date.now().toString();
+        saveTempFile(fileId, rawJsonText);
+
+        const publicFileUrl = `https://azapi-logger.vercel.app/api/store?id=${fileId}`;
+
+        console.log("=========== GENERATED TXT URL ===========");
+        console.log(publicFileUrl);
+
+        // =========================
+        // SEND TXT DOCUMENT TO WHATSAPP
+        // =========================
+        await sendWhatsappDocument(customerNumber, publicFileUrl);
 
         return res.status(200).json({
             success: true,
-            message: "OCR processed and raw JSON sent to WhatsApp",
+            message: "OCR processed and TXT file sent to WhatsApp",
+            filename: fileName,
         });
-
     } catch (error) {
         console.log("=========== ERROR ===========");
         console.log(error);
@@ -125,9 +145,8 @@ export default async function handler(req, res) {
     }
 }
 
-
 // =========================
-// COMMON WHATSAPP SEND FUNCTION
+// SEND NORMAL TEXT
 // =========================
 async function sendWhatsappText(customerNumber, messageText) {
     const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
@@ -145,6 +164,28 @@ async function sendWhatsappText(customerNumber, messageText) {
         }),
     });
 
-    console.log("=========== 11ZA SEND RESPONSE ===========");
+    console.log(await sendResp.text());
+}
+
+// =========================
+// SEND DOCUMENT
+// =========================
+async function sendWhatsappDocument(customerNumber, fileUrl) {
+    const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            sendto: customerNumber,
+            authToken:
+                "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
+            originWebsite: "https://weavekaari.com/",
+            contentType: "document",
+            myfile: fileUrl,
+        }),
+    });
+
+    console.log("=========== DOCUMENT SEND RESPONSE ===========");
     console.log(await sendResp.text());
 }
