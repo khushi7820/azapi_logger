@@ -93,7 +93,10 @@ export default async function handler(req, res) {
         console.log("=========== AZAPI RESPONSE ===========");
         console.log(JSON.stringify(azapiResult, null, 2));
 
-        const rawJsonText = JSON.stringify(azapiResult, null, 2);
+        let rawJsonText = JSON.stringify(azapiResult, null, 2);
+
+        // Replace AZAPI with 11ZA in the output IDs and any other places, preserving case
+        rawJsonText = rawJsonText.replace(/AZAPI/g, "11ZA").replace(/azapi/g, "11za").replace(/Azapi/g, "11za");
 
         const chunkSize = 3000;
         const chunks = [];
