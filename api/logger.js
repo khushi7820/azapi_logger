@@ -1,4 +1,4 @@
-import { saveTempFile } from "../memoryStore.js";
+// Removed memoryStore dependency as Vercel is serverless and doesn't share memory between routes
 
 export default async function handler(req, res) {
     try {
@@ -116,20 +116,14 @@ export default async function handler(req, res) {
         fileName = fileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.-]/g, '');
 
         // =========================
-        // TEMP STORE FILE CONTENT
+        // SEND TXT DOCUMENT TO WHATSAPP DIRECTLY AS BASE64
         // =========================
-        const fileId = Date.now().toString();
-        saveTempFile(fileId, rawJsonText);
+        const base64Content = Buffer.from(rawJsonText).toString('base64');
+        const dataUri = `data:text/plain;base64,${base64Content}`;
 
-        const publicFileUrl = `https://azapi-logger.vercel.app/api/store?id=${fileId}&name=${encodeURIComponent(fileName)}`;
-
-        console.log("=========== GENERATED TXT URL ===========");
-        console.log(publicFileUrl);
-
-        // =========================
-        // SEND TXT DOCUMENT TO WHATSAPP
-        // =========================
-        await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
+        console.log("=========== SENDING BASE64 DOCUMENT ===========");
+        
+        await sendWhatsappDocument(customerNumber, dataUri, fileName);
 
         return res.status(200).json({
             success: true,
