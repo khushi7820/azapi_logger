@@ -1,4 +1,5 @@
 // Removed memoryStore dependency as Vercel is serverless and doesn't share memory between routes
+import zlib from 'zlib';
 
 export default async function handler(req, res) {
     try {
@@ -92,10 +93,25 @@ export default async function handler(req, res) {
 
         const azapiResult = await azapiResponse.json();
 
-        console.log("=========== AZAPI RESPONSE ===========");
-        console.log(JSON.stringify(azapiResult, null, 2));
+        // =========================
+        // CLEAN AND MINIFY JSON
+        // =========================
+        const cleanResult = {
+            no_of_pages: azapiResult.no_of_pages,
+            pages: {}
+        };
 
-        let rawJsonText = JSON.stringify(azapiResult, null, 2);
+        for (const key in azapiResult) {
+            if (key.startsWith('page-')) {
+                const pageData = azapiResult[key];
+                // pageData is an array [dataObject, statusCode]
+                if (Array.isArray(pageData) && pageData[0]) {
+                    cleanResult.pages[key] = pageData[0].output;
+                }
+            }
+        }
+
+        let rawJsonText = JSON.stringify(cleanResult); // Minified
 
         rawJsonText = rawJsonText
             .replace(/AZAPI/g, "11ZA")
@@ -116,12 +132,15 @@ export default async function handler(req, res) {
         fileName = fileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.-]/g, '');
 
         // =========================
-        // GENERATE STATELESS URL WITH BASE64 DATA
+        // COMPRESS AND GENERATE STATELESS URL
         // =========================
-        const base64Content = Buffer.from(rawJsonText).toString('base64');
+        const compressed = zlib.deflateSync(rawJsonText);
+        const base64Content = compressed.toString('base64');
         const publicFileUrl = `https://azapi-logger.vercel.app/files/${encodeURIComponent(base64Content)}/${encodeURIComponent(fileName)}`;
 
         console.log("=========== GENERATED STATELESS TXT URL ===========");
+        console.log("URL Length:", publicFileUrl.length);
+        console.log(publicFileUrl);
         
         await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
 
