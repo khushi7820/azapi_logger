@@ -121,11 +121,10 @@ export default async function handler(req, res) {
         // =========================
         // DYNAMIC FILE NAME
         // =========================
-        const invoiceNo =
-            azapiResult?.output?.invoice_summary?.["invoice no"] || "NO-INVOICE";
+        const summary = azapiResult?.["page-1"]?.[0]?.output?.invoice_summary || azapiResult?.output?.invoice_summary;
 
-        const invoiceDate =
-            azapiResult?.output?.invoice_summary?.["invoice date"] || "NO-DATE";
+        const invoiceNo = summary?.["invoice no"] || "NO-INVOICE";
+        const invoiceDate = summary?.["invoice date"] || "NO-DATE";
 
         let fileName = `${invoiceDate}-${invoiceNo}.txt`;
         // Sanitize filename: replace spaces with dashes and remove any non-alphanumeric/dash/dot characters
