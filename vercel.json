@@ -2,6 +2,10 @@
     "version": 2,
     "rewrites": [
         {
+            "source": "/files/:id/:name",
+            "destination": "/api/store?id=:id"
+        },
+        {
             "source": "/files/:id",
             "destination": "/api/store?id=:id"
         }

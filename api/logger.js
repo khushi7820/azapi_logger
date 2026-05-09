@@ -154,7 +154,7 @@ export default async function handler(req, res) {
 
         if (error) throw error;
 
-        const publicFileUrl = `https://azapi-logger.vercel.app/files/${data.id}`;
+        const publicFileUrl = `https://azapi-logger.vercel.app/files/${data.id}/${fileName}`;
 
         console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
