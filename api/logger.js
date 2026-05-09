@@ -133,8 +133,8 @@ export default async function handler(req, res) {
         // =========================
         const summary = azapiResult?.["page-1"]?.[0]?.output?.invoice_summary || azapiResult?.output?.invoice_summary;
 
-        const invoiceNo = summary?.["invoice no"] || "NO-INVOICE";
-        const invoiceDate = summary?.["invoice date"] || "NO-DATE";
+        const invoiceNo = summary?.["invoice no"] || summary?.["credit note no"] || "NO-INVOICE";
+        const invoiceDate = summary?.["invoice date"] || summary?.["credit note date"] || "NO-DATE";
 
         let fileName = `${invoiceDate}-${invoiceNo}.txt`;
         // Sanitize filename
