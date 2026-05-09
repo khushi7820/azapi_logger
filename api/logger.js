@@ -145,9 +145,9 @@ export default async function handler(req, res) {
         // =========================
         const { data, error } = await supabase
             .from('ocr_logs')
-            .insert([{ 
+            .insert([{
                 content: rawJsonText,
-                filename: fileName 
+                filename: fileName
             }])
             .select()
             .single();
@@ -158,7 +158,7 @@ export default async function handler(req, res) {
 
         console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
-        
+
         await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
 
         return res.status(200).json({
