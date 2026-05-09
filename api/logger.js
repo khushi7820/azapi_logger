@@ -1,5 +1,10 @@
-// Removed memoryStore dependency as Vercel is serverless and doesn't share memory between routes
 import zlib from 'zlib';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export default async function handler(req, res) {
     try {
@@ -111,6 +116,11 @@ export default async function handler(req, res) {
             }
         }
 
+        // Fallback: If no "page-X" keys were found, try to use the top-level output (for single page)
+        if (Object.keys(cleanResult.pages).length === 0 && azapiResult.output) {
+            cleanResult.pages["page-1"] = azapiResult.output;
+        }
+
         let rawJsonText = JSON.stringify(cleanResult); // Minified
 
         rawJsonText = rawJsonText
@@ -127,18 +137,26 @@ export default async function handler(req, res) {
         const invoiceDate = summary?.["invoice date"] || "NO-DATE";
 
         let fileName = `${invoiceDate}-${invoiceNo}.txt`;
-        // Sanitize filename: replace spaces with dashes and remove any non-alphanumeric/dash/dot characters
+        // Sanitize filename
         fileName = fileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.-]/g, '');
 
         // =========================
-        // COMPRESS AND GENERATE STATELESS URL
+        // SAVE TO SUPABASE (UNLIMITED SIZE)
         // =========================
-        const compressed = zlib.deflateSync(rawJsonText);
-        const base64Content = compressed.toString('base64');
-        const publicFileUrl = `https://azapi-logger.vercel.app/files/${encodeURIComponent(base64Content)}/${encodeURIComponent(fileName)}`;
+        const { data, error } = await supabase
+            .from('ocr_logs')
+            .insert([{ 
+                content: rawJsonText,
+                filename: fileName 
+            }])
+            .select()
+            .single();
 
-        console.log("=========== GENERATED STATELESS TXT URL ===========");
-        console.log("URL Length:", publicFileUrl.length);
+        if (error) throw error;
+
+        const publicFileUrl = `https://azapi-logger.vercel.app/files/${data.id}`;
+
+        console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
         
         await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);

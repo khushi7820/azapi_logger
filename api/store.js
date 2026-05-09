@@ -1,31 +1,38 @@
-import zlib from 'zlib';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 export default async function handler(req, res) {
     try {
-        const dataParam = req.query.data;
-        const name = req.query.name || "invoice.txt";
+        const { id } = req.query;
 
-        if (!dataParam) {
-            return res.status(400).send("No data provided");
+        if (!id) {
+            return res.status(400).send("No ID provided");
         }
 
-        // Decode the base64 data
-        const buffer = Buffer.from(dataParam, 'base64');
-        let fileContent;
+        // Fetch from Supabase
+        const { data, error } = await supabase
+            .from('ocr_logs')
+            .select('content, filename')
+            .eq('id', id)
+            .single();
 
+        if (error || !data) {
+            return res.status(404).send("File not found");
+        }
+
+        let fileContent = data.content;
+        const name = data.filename || "invoice.txt";
+
+        // Pretty print if it's JSON
         try {
-            // Try to decompress
-            fileContent = zlib.inflateSync(buffer).toString('utf-8');
-            // If it's JSON, pretty print it
-            try {
-                const jsonObj = JSON.parse(fileContent);
-                fileContent = JSON.stringify(jsonObj, null, 2);
-            } catch (e) {
-                // Not JSON, keep as is
-            }
-        } catch (error) {
-            // Fallback for old uncompressed data
-            fileContent = buffer.toString('utf-8');
+            const jsonObj = JSON.parse(fileContent);
+            fileContent = JSON.stringify(jsonObj, null, 2);
+        } catch (e) {
+            // Not JSON, keep as is
         }
 
         // Set headers for file download

@@ -2,8 +2,8 @@
     "version": 2,
     "rewrites": [
         {
-            "source": "/files/:data/:name",
-            "destination": "/api/store"
+            "source": "/files/:id",
+            "destination": "/api/store?id=:id"
         }
     ]
 }
