@@ -43,9 +43,11 @@ export default async function handler(req, res) {
         const mediaUrl = body.content.media.url;
         const mediaType = body.content.media.type;
         const customerNumber = body.from;
+        const messageId = body.messageId; // Unique ID for each incoming message
 
-        console.log("=========== MEDIA URL EXTRACTED ===========");
-        console.log(mediaUrl);
+        console.log("=========== WEBHOOK LOGS ===========");
+        console.log("Message ID:", messageId);
+        console.log("Media URL:", mediaUrl);
 
         // =========================
         // CONDITION 3: ONLY IMAGE OR DOCUMENT
@@ -97,6 +99,18 @@ export default async function handler(req, res) {
         });
 
         const azapiResult = await azapiResponse.json();
+        console.log("=========== OCR RESPONSE RECEIVED ===========");
+
+        // =========================
+        // VALIDATE OCR RESPONSE
+        // =========================
+        if (!azapiResult || azapiResult.error || azapiResult.status === "failed") {
+            console.log("OCR Error:", azapiResult?.error || "Unknown error");
+            return res.status(200).json({
+                success: false,
+                message: "OCR processing failed or returned error",
+            });
+        }
 
         // =========================
         // CLEAN AND MINIFY JSON
@@ -119,6 +133,17 @@ export default async function handler(req, res) {
         // Fallback: If no "page-X" keys were found, try to use the top-level output (for single page)
         if (Object.keys(cleanResult.pages).length === 0 && azapiResult.output) {
             cleanResult.pages["page-1"] = azapiResult.output;
+        }
+
+        // =========================
+        // FINAL VALIDATION: NO DATA FOUND
+        // =========================
+        if (Object.keys(cleanResult.pages).length === 0) {
+            console.log("Ignored: OCR returned no content pages");
+            return res.status(200).json({
+                success: false,
+                message: "OCR returned empty result, skipping file delivery",
+            });
         }
 
         let rawJsonText = JSON.stringify(cleanResult); // Minified
@@ -147,12 +172,23 @@ export default async function handler(req, res) {
             .from('ocr_logs')
             .insert([{
                 content: rawJsonText,
-                filename: fileName
+                filename: fileName,
+                message_id: messageId // Used for deduplication
             }])
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            // Handle duplicate messageId (Unique constraint violation)
+            if (error.code === '23505') {
+                console.log("Duplicate Message: Already processed messageId", messageId);
+                return res.status(200).json({
+                    success: true,
+                    message: "Duplicate message ignored",
+                });
+            }
+            throw error;
+        }
 
         const publicFileUrl = `https://azapi-logger.vercel.app/files/${data.id}/${fileName}`;
 
