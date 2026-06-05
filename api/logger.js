@@ -146,6 +146,10 @@ export default async function handler(req, res) {
             });
         }
 
+        // Fix invoice_items: parallel arrays → array of objects (all pages)
+        const fixItems = (inv) => { if (inv?.invoice_items?.["sr no."]) inv.invoice_items = inv.invoice_items["sr no."].map((_, i) => Object.fromEntries(Object.entries(inv.invoice_items).map(([k, v]) => [k, v[i]]))); };
+        Object.values(cleanResult.pages).forEach(page => Array.isArray(page) ? page.forEach(fixItems) : fixItems(page));
+
         let rawJsonText = JSON.stringify(cleanResult); // Minified
 
         rawJsonText = rawJsonText

@@ -30,6 +30,8 @@ export default async function handler(req, res) {
         // Pretty print if it's JSON
         try {
             const jsonObj = JSON.parse(fileContent);
+            const fix = (inv) => { if (inv?.invoice_items) inv.invoice_items = inv.invoice_items["sr no."].map((_, i) => Object.fromEntries(Object.entries(inv.invoice_items).map(([k, v]) => [k, v[i]]))); };
+            Array.isArray(jsonObj.output) ? jsonObj.output.forEach(fix) : fix(jsonObj.output);
             fileContent = JSON.stringify(jsonObj, null, 2);
         } catch (e) {
             // Not JSON, keep as is
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
         // Set headers for file download
         res.setHeader("Content-Type", "text/plain");
         res.setHeader("Content-Disposition", `attachment; filename="${name}"`);
-        
+
         res.status(200).send(fileContent);
     } catch (error) {
         res.status(500).send("Store file error: " + error.message);
