@@ -48,11 +48,14 @@ export default async function handler(req, res) {
         console.log("=========== WEBHOOK LOGS ===========");
         console.log("Message ID:", messageId);
         console.log("Media URL:", mediaUrl);
+        console.log("Media Type:", mediaType);
+        console.log("Customer Number:", customerNumber);
 
         // =========================
         // CONDITION 3: ONLY IMAGE OR DOCUMENT
         // =========================
         if (mediaType !== "image" && mediaType !== "document") {
+            console.log("Rejected: Unsupported media type:", mediaType);
             await sendWhatsappText(
                 customerNumber,
                 "Please send only account or billing related documents in (Image or PDF) format. Other media files are not supported."
@@ -70,7 +73,10 @@ export default async function handler(req, res) {
         const allowedExtensions = [".jpg", ".jpeg", ".png", ".pdf"];
         const isAllowedFile = allowedExtensions.some((ext) => lowerUrl.includes(ext));
 
+        console.log("File extension check:", isAllowedFile ? "PASSED" : "FAILED");
+
         if (!isAllowedFile) {
+            console.log("Rejected: Unsupported file extension");
             await sendWhatsappText(
                 customerNumber,
                 "Please send only JPG, PNG or PDF account related files. Excel, video, audio or unsupported files are not accepted."
@@ -84,6 +90,9 @@ export default async function handler(req, res) {
         // =========================
         // CALL AZAPI OCR
         // =========================
+        console.log("=========== CALLING AZAPI OCR ===========");
+        console.log("File URL:", mediaUrl);
+
         const azapiResponse = await fetch("https://adv-ocr.azapi.ai/ind0003b", {
             method: "POST",
             headers: {
@@ -93,8 +102,11 @@ export default async function handler(req, res) {
             body: JSON.stringify({ file: mediaUrl }),
         });
 
+        console.log("AZAPI Status:", azapiResponse.status);
         const azapiResult = await azapiResponse.json();
         console.log("=========== OCR RESPONSE RECEIVED ===========");
+        console.log("OCR Status:", azapiResult?.status);
+        console.log("OCR Pages:", azapiResult?.no_of_pages);
 
         // =========================
         // VALIDATE OCR RESPONSE
@@ -110,6 +122,7 @@ export default async function handler(req, res) {
         // =========================
         // CLEAN AND MINIFY JSON
         // =========================
+        console.log("=========== CLEANING OCR RESULT ===========");
         const cleanResult = {
             no_of_pages: azapiResult.no_of_pages,
             pages: {}
@@ -120,12 +133,14 @@ export default async function handler(req, res) {
                 const pageData = azapiResult[key];
                 if (Array.isArray(pageData) && pageData[0]) {
                     cleanResult.pages[key] = pageData[0].output;
+                    console.log("Page found:", key);
                 }
             }
         }
 
         if (Object.keys(cleanResult.pages).length === 0 && azapiResult.output) {
             cleanResult.pages["page-1"] = azapiResult.output;
+            console.log("Fallback: using top-level output");
         }
 
         if (Object.keys(cleanResult.pages).length === 0) {
@@ -135,6 +150,8 @@ export default async function handler(req, res) {
                 message: "OCR returned empty result, skipping file delivery",
             });
         }
+
+        console.log("Total pages extracted:", Object.keys(cleanResult.pages).length);
 
         // Fix invoice_items: parallel arrays → array of objects (all pages)
         const fixItems = (inv) => { if (inv?.invoice_items?.["sr no."]) inv.invoice_items = inv.invoice_items["sr no."].map((_, i) => Object.fromEntries(Object.entries(inv.invoice_items).map(([k, v]) => [k, v[i]]))); };
@@ -155,10 +172,12 @@ export default async function handler(req, res) {
 
         let fileName = `${invoiceDate}-${invoiceNo}.txt`;
         fileName = fileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.-]/g, '');
+        console.log("Generated filename:", fileName);
 
         // =========================
         // SAVE TO SUPABASE (UNLIMITED SIZE)
         // =========================
+        console.log("=========== SAVING TO SUPABASE ===========");
         const { data, error } = await supabase
             .from('ocr_logs')
             .insert([{
@@ -170,6 +189,7 @@ export default async function handler(req, res) {
             .single();
 
         if (error) {
+            console.log("Supabase Error:", error);
             if (error.code === '23505') {
                 console.log("Duplicate Message: Already processed messageId", messageId);
                 return res.status(200).json({
@@ -179,6 +199,8 @@ export default async function handler(req, res) {
             }
             throw error;
         }
+
+        console.log("Supabase Save Success, ID:", data.id);
 
         const publicFileUrl = `https://azapi-logger.vercel.app/files/${data.id}/${fileName}`;
 
@@ -195,7 +217,8 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.log("=========== ERROR ===========");
-        console.log(error);
+        console.log("Error Message:", error.message);
+        console.log("Error Stack:", error.stack);
         return res.status(500).json({
             success: false,
             error: error.message,
@@ -211,25 +234,31 @@ async function sendWhatsappText(customerNumber, messageText) {
     const origin = process.env.ORIGIN_WEBSITE;
 
     console.log("=========== TEXT SEND DEBUG ===========");
-    console.log("Token:", token);
+    console.log("Token:", token ? "SET ✓" : "MISSING ✗");
     console.log("Origin:", origin);
     console.log("To:", customerNumber);
     console.log("Message:", messageText);
 
+    const payload = {
+        sendto: customerNumber,
+        authToken: token,
+        originWebsite: origin,
+        contentType: "text",
+        text: messageText,
+    };
+
+    console.log("Payload:", JSON.stringify(payload));
+
     const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            sendto: customerNumber,
-            authToken: token,
-            originWebsite: origin,
-            contentType: "text",
-            text: messageText,
-        }),
+        body: JSON.stringify(payload),
     });
 
+    const responseText = await sendResp.text();
     console.log("=========== TEXT SEND RESPONSE ===========");
-    console.log(await sendResp.text());
+    console.log("Status:", sendResp.status);
+    console.log("Response:", responseText);
 }
 
 // =========================
@@ -239,19 +268,29 @@ async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
     const token = process.env.WHATSAPP_TOKEN;
     const origin = process.env.ORIGIN_WEBSITE;
 
+    console.log("=========== DOCUMENT SEND DEBUG ===========");
+    console.log("Token:", token ? "SET ✓" : "MISSING ✗");
+    console.log("To:", customerNumber);
+    console.log("File URL:", fileUrl);
+    console.log("File Name:", fileName);
+
+    const payload = {
+        sendto: customerNumber,
+        authToken: token,
+        originWebsite: origin,
+        contentType: "document",
+        myfile: fileUrl,
+        filename: fileName,
+    };
+
     const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            sendto: customerNumber,
-            authToken: token,
-            originWebsite: origin,
-            contentType: "document",
-            myfile: fileUrl,
-            filename: fileName,
-        }),
+        body: JSON.stringify(payload),
     });
 
+    const responseText = await sendResp.text();
     console.log("=========== DOCUMENT SEND RESPONSE ===========");
-    console.log(await sendResp.text());
+    console.log("Status:", sendResp.status);
+    console.log("Response:", responseText);
 }
