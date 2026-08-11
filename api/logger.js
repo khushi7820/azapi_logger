@@ -254,7 +254,7 @@ async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
                 "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
             originWebsite: "https://weavekaari.com/",
             contentType: "document",
-            myfile: fileUrl,
+            url: fileUrl,
             filename: fileName, // Some APIs use this to set the name of the document
         }),
     });
