@@ -229,7 +229,7 @@ async function sendWhatsappText(customerNumber, messageText) {
         body: JSON.stringify({
             sendto: customerNumber,
             authToken:
-                "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
+                "U2FsdGVkX1/GSGw08kH2fHtWj+keT0Rm14t+hfin1u8N4s4dqa/T9zz+AF1c7EWbsbNHva0D+rqL8tEAhPKsOkKVqOFx4UEcb6sidokcPXyI4kYclzpc0yrAX6op/CYZnZT4QXZOb48gSQlA6LK3aXZpapYbPlS0TT3G4wHpVxMMwobYQhnr6RCqElAXQr+o",
             originWebsite: "https://weavekaari.com/",
             contentType: "text",
             text: messageText,
@@ -251,7 +251,7 @@ async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
         body: JSON.stringify({
             sendto: customerNumber,
             authToken:
-                "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
+                "U2FsdGVkX1/GSGw08kH2fHtWj+keT0Rm14t+hfin1u8N4s4dqa/T9zz+AF1c7EWbsbNHva0D+rqL8tEAhPKsOkKVqOFx4UEcb6sidokcPXyI4kYclzpc0yrAX6op/CYZnZT4QXZOb48gSQlA6LK3aXZpapYbPlS0TT3G4wHpVxMMwobYQhnr6RCqElAXQr+o",
             originWebsite: "https://weavekaari.com/",
             contentType: "document",
             myfile: fileUrl,
