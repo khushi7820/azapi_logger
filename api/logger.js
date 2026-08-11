@@ -13,14 +13,31 @@ export default async function handler(req, res) {
 
         const body = req.body;
 
+        // =========================
+        // CONDITION 1: ONLY REAL USER INCOMING MESSAGE
+        // =========================
         if (body.event !== "MoMessage") {
             console.log("Ignored: Not a real incoming user message");
-            return res.status(200).json({ success: true, message: "Ignored non-MoMessage webhook" });
+            return res.status(200).json({
+                success: true,
+                message: "Ignored non-MoMessage webhook",
+            });
         }
 
-        if (!body.content || body.content.contentType !== "media" || !body.content.media || !body.content.media.url) {
+        // =========================
+        // CONDITION 2: ONLY MEDIA CONTENT
+        // =========================
+        if (
+            !body.content ||
+            body.content.contentType !== "media" ||
+            !body.content.media ||
+            !body.content.media.url
+        ) {
             console.log("Ignored: No valid media found");
-            return res.status(200).json({ success: true, message: "Ignored non-media message" });
+            return res.status(200).json({
+                success: true,
+                message: "Ignored non-media message",
+            });
         }
 
         const mediaUrl = body.content.media.url;
@@ -32,20 +49,41 @@ export default async function handler(req, res) {
         console.log("Message ID:", messageId);
         console.log("Media URL:", mediaUrl);
 
+        // =========================
+        // CONDITION 3: ONLY IMAGE OR DOCUMENT
+        // =========================
         if (mediaType !== "image" && mediaType !== "document") {
-            await sendWhatsappText(customerNumber, "Please send only account or billing related documents in (Image or PDF) format. Other media files are not supported.");
-            return res.status(200).json({ success: true, message: "Unsupported media type rejected" });
+            await sendWhatsappText(
+                customerNumber,
+                "Please send only account or billing related documents in (Image or PDF) format. Other media files are not supported."
+            );
+            return res.status(200).json({
+                success: true,
+                message: "Unsupported media type rejected",
+            });
         }
 
+        // =========================
+        // CONDITION 4: VALID FILE EXTENSION ONLY
+        // =========================
         const lowerUrl = mediaUrl.toLowerCase();
         const allowedExtensions = [".jpg", ".jpeg", ".png", ".pdf"];
         const isAllowedFile = allowedExtensions.some((ext) => lowerUrl.includes(ext));
 
         if (!isAllowedFile) {
-            await sendWhatsappText(customerNumber, "Please send only JPG, PNG or PDF account related files. Excel, video, audio or unsupported files are not accepted.");
-            return res.status(200).json({ success: true, message: "Unsupported file extension rejected" });
+            await sendWhatsappText(
+                customerNumber,
+                "Please send only JPG, PNG or PDF account related files. Excel, video, audio or unsupported files are not accepted."
+            );
+            return res.status(200).json({
+                success: true,
+                message: "Unsupported file extension rejected",
+            });
         }
 
+        // =========================
+        // CALL AZAPI OCR
+        // =========================
         const azapiResponse = await fetch("https://adv-ocr.azapi.ai/ind0003b", {
             method: "POST",
             headers: {
@@ -58,12 +96,24 @@ export default async function handler(req, res) {
         const azapiResult = await azapiResponse.json();
         console.log("=========== OCR RESPONSE RECEIVED ===========");
 
+        // =========================
+        // VALIDATE OCR RESPONSE
+        // =========================
         if (!azapiResult || azapiResult.error || azapiResult.status === "failed") {
             console.log("OCR Error:", azapiResult?.error || "Unknown error");
-            return res.status(200).json({ success: false, message: "OCR processing failed or returned error" });
+            return res.status(200).json({
+                success: false,
+                message: "OCR processing failed or returned error",
+            });
         }
 
-        const cleanResult = { no_of_pages: azapiResult.no_of_pages, pages: {} };
+        // =========================
+        // CLEAN AND MINIFY JSON
+        // =========================
+        const cleanResult = {
+            no_of_pages: azapiResult.no_of_pages,
+            pages: {}
+        };
 
         for (const key in azapiResult) {
             if (key.startsWith('page-')) {
@@ -80,15 +130,25 @@ export default async function handler(req, res) {
 
         if (Object.keys(cleanResult.pages).length === 0) {
             console.log("Ignored: OCR returned no content pages");
-            return res.status(200).json({ success: false, message: "OCR returned empty result, skipping file delivery" });
+            return res.status(200).json({
+                success: false,
+                message: "OCR returned empty result, skipping file delivery",
+            });
         }
 
+        // Fix invoice_items: parallel arrays → array of objects (all pages)
         const fixItems = (inv) => { if (inv?.invoice_items?.["sr no."]) inv.invoice_items = inv.invoice_items["sr no."].map((_, i) => Object.fromEntries(Object.entries(inv.invoice_items).map(([k, v]) => [k, v[i]]))); };
         Object.values(cleanResult.pages).forEach(page => Array.isArray(page) ? page.forEach(fixItems) : fixItems(page));
 
         let rawJsonText = JSON.stringify(cleanResult);
-        rawJsonText = rawJsonText.replace(/AZAPI/g, "11ZA").replace(/azapi/g, "11za").replace(/Azapi/g, "11za");
+        rawJsonText = rawJsonText
+            .replace(/AZAPI/g, "11ZA")
+            .replace(/azapi/g, "11za")
+            .replace(/Azapi/g, "11za");
 
+        // =========================
+        // DYNAMIC FILE NAME
+        // =========================
         const summary = azapiResult?.["page-1"]?.[0]?.output?.invoice_summary || azapiResult?.output?.invoice_summary;
         const invoiceNo = summary?.["invoice no"] || summary?.["credit note no"] || "NO-INVOICE";
         const invoiceDate = summary?.["invoice date"] || summary?.["credit note date"] || "NO-DATE";
@@ -96,16 +156,26 @@ export default async function handler(req, res) {
         let fileName = `${invoiceDate}-${invoiceNo}.txt`;
         fileName = fileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9.-]/g, '');
 
+        // =========================
+        // SAVE TO SUPABASE (UNLIMITED SIZE)
+        // =========================
         const { data, error } = await supabase
             .from('ocr_logs')
-            .insert([{ content: rawJsonText, filename: fileName, message_id: messageId }])
+            .insert([{
+                content: rawJsonText,
+                filename: fileName,
+                message_id: messageId
+            }])
             .select()
             .single();
 
         if (error) {
             if (error.code === '23505') {
                 console.log("Duplicate Message: Already processed messageId", messageId);
-                return res.status(200).json({ success: true, message: "Duplicate message ignored" });
+                return res.status(200).json({
+                    success: true,
+                    message: "Duplicate message ignored",
+                });
             }
             throw error;
         }
@@ -115,47 +185,73 @@ export default async function handler(req, res) {
         console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
 
-        // Send as text message with download link
         await sendWhatsappText(customerNumber, `Invoice processed! Download here: ${publicFileUrl}`);
 
-        return res.status(200).json({ success: true, message: "OCR processed and link sent to WhatsApp", filename: fileName });
+        return res.status(200).json({
+            success: true,
+            message: "OCR processed and link sent to WhatsApp",
+            filename: fileName,
+        });
 
     } catch (error) {
         console.log("=========== ERROR ===========");
         console.log(error);
-        return res.status(500).json({ success: false, error: error.message });
+        return res.status(500).json({
+            success: false,
+            error: error.message,
+        });
     }
 }
 
+// =========================
+// SEND NORMAL TEXT
+// =========================
 async function sendWhatsappText(customerNumber, messageText) {
+    const token = process.env.WHATSAPP_TOKEN;
+    const origin = process.env.ORIGIN_WEBSITE;
+
+    console.log("=========== TEXT SEND DEBUG ===========");
+    console.log("Token:", token);
+    console.log("Origin:", origin);
+    console.log("To:", customerNumber);
+    console.log("Message:", messageText);
+
     const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             sendto: customerNumber,
-            authToken: process.env.WHATSAPP_TOKEN,
-            originWebsite: process.env.ORIGIN_WEBSITE,
+            authToken: token,
+            originWebsite: origin,
             contentType: "text",
             text: messageText,
         }),
     });
+
     console.log("=========== TEXT SEND RESPONSE ===========");
     console.log(await sendResp.text());
 }
 
+// =========================
+// SEND DOCUMENT
+// =========================
 async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
+    const token = process.env.WHATSAPP_TOKEN;
+    const origin = process.env.ORIGIN_WEBSITE;
+
     const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             sendto: customerNumber,
-            authToken: process.env.WHATSAPP_TOKEN,
-            originWebsite: process.env.ORIGIN_WEBSITE,
+            authToken: token,
+            originWebsite: origin,
             contentType: "document",
             myfile: fileUrl,
             filename: fileName,
         }),
     });
+
     console.log("=========== DOCUMENT SEND RESPONSE ===========");
     console.log(await sendResp.text());
 }
