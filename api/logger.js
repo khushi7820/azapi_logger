@@ -199,7 +199,7 @@ export default async function handler(req, res) {
         console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
 
-        await sendWhatsappText(customerNumber, `Your invoice has been processed! Download here:\n${publicFileUrl}`);
+        await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
 
         return res.status(200).json({
             success: true,
