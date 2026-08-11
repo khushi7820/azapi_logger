@@ -199,7 +199,7 @@ export default async function handler(req, res) {
         console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
 
-        await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
+        await sendWhatsappText(customerNumber, `Your invoice has been processed! Download here:\n${publicFileUrl}`);
 
         return res.status(200).json({
             success: true,
@@ -254,7 +254,7 @@ async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
                 "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
             originWebsite: "https://weavekaari.com/",
             contentType: "document",
-            url: fileUrl,
+            myfile: fileUrl,
             filename: fileName, // Some APIs use this to set the name of the document
         }),
     });
