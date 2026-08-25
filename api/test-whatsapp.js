@@ -16,12 +16,12 @@ export default async function handler(req, res) {
         };
 
         const rawJsonText = JSON.stringify(mockResult, null, 2);
-        
+
         let fileName = "15-08-2023-TEST-123.txt";
 
         // Generate Base64 Data URI
         const base64Content = Buffer.from(rawJsonText).toString('base64');
-        const publicFileUrl = `https://azapi-logger.vercel.app/files/${encodeURIComponent(base64Content)}/${encodeURIComponent(fileName)}`;
+        const publicFileUrl = "https://azapi-logger.vercel.app/files/fd9701fa-118d-475b-9d79-c9a8f304ce63/06-05-2026-503.txt";
 
         // Send to WhatsApp using the exact same function
         const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
@@ -31,11 +31,9 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 sendto: customerNumber,
-                authToken: "U2FsdGVkX1/25Ds87RAiqVKbeSF5lK1VDaZ01PACzOMzSonYJUauutr39681t9qeZA/jdFyGKnPTaQWMqmIymD8vLk8mujGqIt1lpYTJy/JetykxddMWSOwE7aVaC/fEjsCVHnHyc7HzqjuALJTkHnlA5sQXiTazW/YyPjGMTVnyyqemwp2XWnqx+MObrx2f",
-                originWebsite: "https://weavekaari.com/",
-                contentType: "document",
+                authToken: "U2FsdGVkX1/GSGw08kH2fHtWj+keT0Rm14t+hfin1u8N4s4dqa/T9zz+AF1c7EWbsbNHva0D+rqL8tEAhPKsOkKVqOFx4UEcb6sidokcPXyI4kYclzpc0yrAX6op/CYZnZT4QXZOb48gSQlA6LK3aXZpapYbPlS0TT3G4wHpVxMMwobYQhnr6RCqElAXQr+o",
                 myfile: publicFileUrl,
-                filename: fileName, 
+                filename: fileName,
             }),
         });
 
