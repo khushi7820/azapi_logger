@@ -1,3 +1,4 @@
+import zlib from 'zlib';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -10,19 +11,7 @@ export default async function handler(req, res) {
         console.log("=========== 11ZA INCOMING WEBHOOK ===========");
         console.log("BODY:", req.body);
 
-        // Guard: req.body can be undefined (GET request / unparsed body).
-        // Without this, body.event throws "Cannot read properties of undefined".
-        let body = req.body;
-        if (typeof body === "string") {
-            try { body = JSON.parse(body); } catch { body = null; }
-        }
-        if (!body || typeof body !== "object") {
-            console.log("Ignored: empty or unparsable body");
-            return res.status(200).json({
-                success: true,
-                message: "No webhook body received",
-            });
-        }
+        const body = req.body;
 
         // =========================
         // CONDITION 1: ONLY REAL USER INCOMING MESSAGE
@@ -164,7 +153,7 @@ export default async function handler(req, res) {
 
         console.log("Total pages extracted:", Object.keys(cleanResult.pages).length);
 
-        // Fix invoice_items: parallel arrays -> array of objects (all pages)
+        // Fix invoice_items: parallel arrays → array of objects (all pages)
         const fixItems = (inv) => { if (inv?.invoice_items?.["sr no."]) inv.invoice_items = inv.invoice_items["sr no."].map((_, i) => Object.fromEntries(Object.entries(inv.invoice_items).map(([k, v]) => [k, v[i]]))); };
         Object.values(cleanResult.pages).forEach(page => Array.isArray(page) ? page.forEach(fixItems) : fixItems(page));
 
@@ -218,30 +207,11 @@ export default async function handler(req, res) {
         console.log("=========== GENERATED PERMANENT URL ===========");
         console.log(publicFileUrl);
 
-        // Send as document. If 11za rejects it, fall back to the text link so the
-        // customer always receives something -- otherwise they get nothing and the
-        // duplicate check above blocks any retry of the same messageId.
-        let sentAsDocument = await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
-
-        // 11za rejects sends that arrive too close together (seen as
-        // "Something went wrong!"). Wait and try once more before giving up.
-        if (!sentAsDocument) {
-            console.log("Document send failed - retrying in 3s");
-            await new Promise((r) => setTimeout(r, 3000));
-            sentAsDocument = await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
-        }
-
-        // Last resort: send the link so the customer always receives something.
-        if (!sentAsDocument) {
-            console.log("Retry failed - falling back to text link");
-            await sendWhatsappText(customerNumber, `Invoice processed! Download here: ${publicFileUrl}`);
-        }
+        await sendWhatsappDocument(customerNumber, publicFileUrl, fileName);
 
         return res.status(200).json({
             success: true,
-            message: sentAsDocument
-                ? "OCR processed and TXT file sent to WhatsApp"
-                : "Document send failed, link sent instead",
+            message: "OCR processed and link sent to WhatsApp",
             filename: fileName,
         });
 
@@ -264,9 +234,10 @@ async function sendWhatsappText(customerNumber, messageText) {
     const origin = process.env.ORIGIN_WEBSITE;
 
     console.log("=========== TEXT SEND DEBUG ===========");
-    console.log("Token:", token ? "SET" : "MISSING");
+    console.log("Token:", token ? "SET ✓" : "MISSING ✗");
     console.log("Origin:", origin);
     console.log("To:", customerNumber);
+    console.log("Message:", messageText);
 
     const payload = {
         sendto: customerNumber,
@@ -276,22 +247,18 @@ async function sendWhatsappText(customerNumber, messageText) {
         text: messageText,
     };
 
-    try {
-        const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
+    console.log("Payload:", JSON.stringify(payload));
 
-        const responseText = await sendResp.text();
-        console.log("=========== TEXT SEND RESPONSE ===========");
-        console.log("Status:", sendResp.status);
-        console.log("Response:", responseText);
-        return isSendSuccessful(responseText);
-    } catch (err) {
-        console.log("Text send threw:", err.message);
-        return false;
-    }
+    const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
+
+    const responseText = await sendResp.text();
+    console.log("=========== TEXT SEND RESPONSE ===========");
+    console.log("Status:", sendResp.status);
+    console.log("Response:", responseText);
 }
 
 // =========================
@@ -302,7 +269,7 @@ async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
     const origin = process.env.ORIGIN_WEBSITE;
 
     console.log("=========== DOCUMENT SEND DEBUG ===========");
-    console.log("Token:", token ? "SET" : "MISSING");
+    console.log("Token:", token ? "SET ✓" : "MISSING ✗");
     console.log("To:", customerNumber);
     console.log("File URL:", fileUrl);
     console.log("File Name:", fileName);
@@ -316,37 +283,14 @@ async function sendWhatsappDocument(customerNumber, fileUrl, fileName) {
         filename: fileName,
     };
 
-    try {
-        const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
+    const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+    });
 
-        const responseText = await sendResp.text();
-        console.log("=========== DOCUMENT SEND RESPONSE ===========");
-        console.log("Status:", sendResp.status);
-        console.log("Response:", responseText);
-
-        return isSendSuccessful(responseText);
-    } catch (err) {
-        console.log("Document send threw:", err.message);
-        return false;
-    }
-}
-
-// =========================
-// CHECK IF 11ZA ACTUALLY SENT IT
-// =========================
-// 11za returns HTTP 200 even on failure, so the body must be checked.
-//   success -> {"Message":"Message Sent","Data":{"messageId":"wamid..."}}
-//   failure -> {"Message":"Something went wrong!","Data":0,...}
-function isSendSuccessful(responseText) {
-    try {
-        const json = JSON.parse(responseText);
-        return json?.Message === "Message Sent" || Boolean(json?.Data?.messageId);
-    } catch {
-        console.log("Could not parse 11za response as JSON - treating as failure");
-        return false;
-    }
+    const responseText = await sendResp.text();
+    console.log("=========== DOCUMENT SEND RESPONSE ===========");
+    console.log("Status:", sendResp.status);
+    console.log("Response:", responseText);
 }
