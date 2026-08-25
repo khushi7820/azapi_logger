@@ -6,9 +6,24 @@ export default async function handler(req, res) {
             return res.status(400).send("Please provide a WhatsApp number, e.g., /api/test-whatsapp?number=919876543210");
         }
 
-        const fileName = "06-05-2026-503.txt";
+        const mockResult = {
+            output: {
+                invoice_summary: {
+                    "invoice no": "TEST-123",
+                    "invoice date": "15-08-2023"
+                }
+            }
+        };
+
+        const rawJsonText = JSON.stringify(mockResult, null, 2);
+
+        let fileName = "15-08-2023-TEST-123.txt";
+
+        // Generate Base64 Data URI
+        const base64Content = Buffer.from(rawJsonText).toString('base64');
         const publicFileUrl = "https://azapi-logger.vercel.app/files/fd9701fa-118d-475b-9d79-c9a8f304ce63/06-05-2026-503.txt";
 
+        // Send to WhatsApp using the exact same function
         const sendResp = await fetch("https://api.11za.in/apis/sendMessage/sendMessages", {
             method: "POST",
             headers: {
